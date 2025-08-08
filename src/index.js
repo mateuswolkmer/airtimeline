@@ -15,7 +15,20 @@ const views = {
 };
 
 function App() {
-  const [items, setItems] = useState(timelineItems);
+  // Load cached items or use defaults
+  const [items, setItems] = useState(() => {
+    const cached = localStorage.getItem("timeline-items");
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        console.warn("Failed to parse cached timeline items, using defaults");
+        return timelineItems;
+      }
+    }
+    return timelineItems;
+  });
+
   const lanes = assignLanes(items);
   console.log(lanes);
 
@@ -27,6 +40,10 @@ function App() {
   const [dragState, setDragState] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragPreview, setDragPreview] = useState(null);
+
+  // Editing state
+  const [editingItem, setEditingItem] = useState(null);
+  const [editValue, setEditValue] = useState("");
 
   // Helper to get the start of the week for a given date (Sunday)
   const getStartOfWeek = (date) => {
@@ -291,6 +308,7 @@ function App() {
             start: newStartDate.toISOString().split("T")[0],
           };
           setItems(newItems);
+          saveItemsToCache(newItems);
 
           // Update drag preview
           setDragPreview((prev) => ({
@@ -312,6 +330,7 @@ function App() {
             end: newEndDate.toISOString().split("T")[0],
           };
           setItems(newItems);
+          saveItemsToCache(newItems);
 
           // Update drag preview
           setDragPreview((prev) => ({
@@ -355,6 +374,95 @@ function App() {
     }
   }, [isDragging, handleDragMove, handleDragEnd]);
 
+  // Inline editing handlers
+  const handleStartEdit = useCallback((itemId, currentName) => {
+    setEditingItem(itemId);
+    setEditValue(currentName);
+
+    // Focus the contenteditable span after a brief delay to ensure it's rendered
+    setTimeout(() => {
+      const editableSpan = document.querySelector(`[data-item-id="${itemId}"]`);
+      if (editableSpan) {
+        editableSpan.focus();
+        // Select all text for easy replacement
+        const range = document.createRange();
+        range.selectNodeContents(editableSpan);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }, 0);
+  }, []);
+
+  // Cache items to localStorage
+  const saveItemsToCache = useCallback((newItems) => {
+    try {
+      localStorage.setItem("timeline-items", JSON.stringify(newItems));
+    } catch (e) {
+      console.warn("Failed to save timeline items to cache:", e);
+    }
+  }, []);
+
+  const handleSaveEdit = useCallback(() => {
+    if (!editingItem) return;
+
+    // Find the contenteditable span for the current editing item
+    const editableSpan = document.querySelector(
+      `[data-item-id="${editingItem}"]`
+    );
+    if (!editableSpan) return;
+
+    const newValue = editableSpan.textContent.trim();
+    if (!newValue) return;
+
+    const itemIndex = items.findIndex((item) => item.id === editingItem);
+    if (itemIndex === -1) return;
+
+    const newItems = [...items];
+    newItems[itemIndex] = {
+      ...newItems[itemIndex],
+      name: newValue,
+    };
+    setItems(newItems);
+    saveItemsToCache(newItems);
+    setEditingItem(null);
+    setEditValue("");
+  }, [editingItem, items, saveItemsToCache]);
+
+  const handleCancelEdit = useCallback(() => {
+    if (!editingItem) return;
+
+    // Find the contenteditable span and restore original text
+    const editableSpan = document.querySelector(
+      `[data-item-id="${editingItem}"]`
+    );
+    if (editableSpan) {
+      const originalItem = items.find((item) => item.id === editingItem);
+      if (originalItem) {
+        editableSpan.textContent = originalItem.name;
+      }
+    }
+
+    setEditingItem(null);
+    setEditValue("");
+  }, [editingItem, items]);
+
+  const handleKeyDown = useCallback(
+    (e) => {
+      if (e.key === "Enter") {
+        handleSaveEdit();
+      } else if (e.key === "Escape") {
+        handleCancelEdit();
+      }
+    },
+    [handleSaveEdit, handleCancelEdit]
+  );
+
+  const handleResetToDefaults = useCallback(() => {
+    localStorage.removeItem("timeline-items");
+    setItems(timelineItems);
+  }, []);
+
   // For the header, show the month/year for month view, week range for week view, and date for day view
   let headerLabel = "";
   if (view === views.month) {
@@ -385,7 +493,12 @@ function App() {
     <div className="p-8 w-screen h-screen">
       <section className="flex flex-col size-full rounded-xl bg-background-section border border-border">
         <header className="flex justify-between items-center p-4 border-b-border border-b">
-          <h1 className="text-2xl font-bold">Airtimeline</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold">Airtimeline</h1>
+            <Button onClick={handleResetToDefaults} variant="outline">
+              Reset data
+            </Button>
+          </div>
           <div className="flex gap-2">
             {Object.values(views).map((v) => {
               const isActive = view === v;
@@ -539,7 +652,41 @@ function App() {
                       title="Drag to resize end date"
                     />
 
-                    <span className="font-medium truncate" title={item.name}>
+                    <span
+                      className={`font-medium truncate px-1 py-0.5 rounded transition-colors ${
+                        editingItem === item.id
+                          ? "cursor-text outline-none bg-gray-100"
+                          : "cursor-pointer hover:bg-gray-100"
+                      }`}
+                      title={
+                        editingItem === item.id
+                          ? "Press Enter to save, Escape to cancel"
+                          : `Click to edit: ${item.name}`
+                      }
+                      contentEditable={editingItem === item.id}
+                      suppressContentEditableWarning={true}
+                      data-item-id={item.id}
+                      onFocus={() => {
+                        if (editingItem !== item.id) {
+                          handleStartEdit(item.id, item.name);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (editingItem === item.id) {
+                          handleSaveEdit();
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (editingItem === item.id) {
+                          handleKeyDown(e);
+                        }
+                      }}
+                      onClick={() => {
+                        if (editingItem !== item.id) {
+                          handleStartEdit(item.id, item.name);
+                        }
+                      }}
+                    >
                       {item.name}
                     </span>
                     <span className="text-xs opacity-75 truncate">
