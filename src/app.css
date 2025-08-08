@@ -8,6 +8,18 @@
 
   --color-hover: #ccecfb;
   --color-active: #012d99;
+
+  --animate-wiggle: wiggle 0.2s ease-in-out infinite;
+
+  @keyframes wiggle {
+    0%,
+    100% {
+      transform: rotate(-0.5deg);
+    }
+    50% {
+      transform: rotate(0.5deg);
+    }
+  }
 }
 
 @layer base {

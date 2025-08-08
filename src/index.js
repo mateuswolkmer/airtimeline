@@ -3,6 +3,10 @@ import ReactDOM from "react-dom/client";
 import timelineItems from "./timelineItems.js";
 import { assignLanes } from "./assignLanes.js";
 import { twMerge } from "tailwind-merge";
+import { Button } from "./components/Button.js";
+import { capitalize } from "./utils/stringUtils.js";
+import { PreviousArrow } from "./components/Icons/PreviousArrow.js";
+import { NextArrow } from "./components/Icons/NextArrow.js";
 
 const views = {
   month: "month",
@@ -379,33 +383,49 @@ function App() {
 
   return (
     <div className="p-8 w-screen h-screen">
-      {/* Timeline */}
       <section className="flex flex-col size-full rounded-xl bg-background-section border border-border">
         <header className="flex justify-between items-center p-4 border-b-border border-b">
-          <h1 className="text-2xl font-bold">Timeline</h1>
+          <h1 className="text-2xl font-bold">Airtimeline</h1>
           <div className="flex gap-2">
-            {Object.values(views).map((v) => (
-              <button
-                key={v}
-                onClick={() => handleSetView(v)}
-                className={`${
-                  view === v ? "bg-blue-500 text-white" : "bg-white text-black"
-                } px-4 py-2 rounded-md`}
-              >
-                {v}
-              </button>
-            ))}
+            {Object.values(views).map((v) => {
+              const isActive = view === v;
+              return (
+                <Button
+                  key={v}
+                  onClick={() => handleSetView(v)}
+                  variant={isActive ? "filled" : "outline"}
+                >
+                  {capitalize(v)}
+                </Button>
+              );
+            })}
           </div>
         </header>
         <nav className="flex flex-col items-center py-2 border-b-border border-b gap-2">
-          <div className="flex gap-2 w-full justify-between px-4">
-            <button onClick={handlePrevious}>
-              <span>{"<"}</span>
-            </button>
-            <span>{headerLabel}</span>
-            <button onClick={handleNext}>
-              <span>{">"}</span>
-            </button>
+          <div className="flex gap-2 w-full justify-between px-4 relative">
+            <div className="flex gap-2">
+              <Button onClick={handlePrevious} onlyIcon size="sm">
+                <PreviousArrow />
+              </Button>
+              {!hasVisibleEvents && hasPastEvents && (
+                <Button onClick={handleGoToClosestPast} size="sm">
+                  Go to closest past event
+                </Button>
+              )}
+            </div>
+            <span className="absolute left-1/2 -translate-x-1/2">
+              {headerLabel}
+            </span>
+            <div className="flex gap-2">
+              {!hasVisibleEvents && hasFutureEvents && (
+                <Button onClick={handleGoToClosestFuture} size="sm">
+                  Go to closest future event
+                </Button>
+              )}
+              <Button onClick={handleNext} onlyIcon size="sm">
+                <NextArrow />
+              </Button>
+            </div>
           </div>
           <div className="flex gap-2 w-full">
             <div className="flex w-full flex-1">
@@ -429,23 +449,6 @@ function App() {
           </div>
         </nav>
         <main className="py-4 relative size-full">
-          {!hasVisibleEvents && hasPastEvents && (
-            <button
-              onClick={handleGoToClosestPast}
-              className="absolute top-2 left-2 px-3 py-1 bg-gray-500 text-white rounded text-sm hover:bg-gray-600 z-10"
-            >
-              Go to closest past event
-            </button>
-          )}
-          {!hasVisibleEvents && hasFutureEvents && (
-            <button
-              onClick={handleGoToClosestFuture}
-              className="absolute top-2 right-2 px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 z-10"
-            >
-              Go to closest future event
-            </button>
-          )}
-
           {/* Drag preview tooltip */}
           {isDragging && dragPreview && (
             <div
@@ -481,7 +484,7 @@ function App() {
             {laneColumns.map((_, colIdx) => (
               <div
                 key={`col-border-${colIdx}`}
-                className="absolute top-2 bottom-2 border-l border-border/25 pointer-events-none"
+                className="absolute top-2 bottom-2 border-l border-border/25 border-dashed pointer-events-none"
                 style={{
                   left: `calc(${(colIdx / laneColumns.length) * 100}% )`,
                   gridRow: `1 / span ${lanes.length || 1}`,
@@ -502,14 +505,15 @@ function App() {
                   <div
                     key={item.id}
                     className={twMerge(
-                      "bg-white flex flex-col gap-2 py-2 px-4 rounded border border-border z-10 relative",
+                      "bg-white flex flex-col gap-2 py-2 px-4 rounded border border-border z-10 relative transition-shadow",
                       isBeingDragged
-                        ? "opacity-75 shadow-lg"
-                        : "hover:shadow-md"
+                        ? "opacity-75 shadow-md animate-wiggle"
+                        : "hover:shadow-sm"
                     )}
                     style={{
                       gridRow: laneIdx + 1,
                       gridColumn: `${offset + 1} / span ${span}`,
+                      "--col-span": span,
                     }}
                   >
                     {/* Left drag handle */}
