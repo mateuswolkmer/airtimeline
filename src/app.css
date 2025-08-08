@@ -3,8 +3,11 @@
 @theme {
   --color-background: #f8f9f2;
   --color-background-section: #fff;
-  --color-foreground: #333;
+  --color-foreground: #181d26;
   --color-border: #c5c7cd;
+
+  --color-hover: #ccecfb;
+  --color-active: #012d99;
 }
 
 @layer base {

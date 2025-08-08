@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import ReactDOM from "react-dom/client";
 import timelineItems from "./timelineItems.js";
 import { assignLanes } from "./assignLanes.js";
+import { twMerge } from "tailwind-merge";
 
 const views = {
   month: "month",
@@ -10,12 +11,18 @@ const views = {
 };
 
 function App() {
-  const lanes = assignLanes(timelineItems);
+  const [items, setItems] = useState(timelineItems);
+  const lanes = assignLanes(items);
   console.log(lanes);
 
   // Use a single date to represent the current focus
   const [view, setView] = useState(views.month);
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  // Drag state
+  const [dragState, setDragState] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragPreview, setDragPreview] = useState(null);
 
   // Helper to get the start of the week for a given date (Sunday)
   const getStartOfWeek = (date) => {
@@ -134,7 +141,7 @@ function App() {
     let closestEvent = null;
     let minDaysDiff = Infinity;
 
-    timelineItems.forEach((item) => {
+    items.forEach((item) => {
       const eventDate = new Date(item.start);
       eventDate.setHours(0, 0, 0, 0);
 
@@ -158,7 +165,7 @@ function App() {
     let closestEvent = null;
     let minDaysDiff = Infinity;
 
-    timelineItems.forEach((item) => {
+    items.forEach((item) => {
       const eventDate = new Date(item.start);
       eventDate.setHours(0, 0, 0, 0);
 
@@ -201,7 +208,7 @@ function App() {
   // Check if there are any events currently visible in the current view
   const hasVisibleEvents = useMemo(() => {
     // For each item, check if any part of it is visible in the current laneColumns
-    return timelineItems.some((item) => {
+    return items.some((item) => {
       const itemStart = new Date(item.start);
       const itemEnd = new Date(item.end);
       // Find if any column is within the item's range
@@ -209,7 +216,140 @@ function App() {
         return col >= itemStart && col <= itemEnd;
       });
     });
-  }, [timelineItems, laneColumns]);
+  }, [items, laneColumns]);
+
+  // Drag handlers
+  const handleDragStart = useCallback(
+    (e, itemId, handle) => {
+      e.preventDefault();
+      setIsDragging(true);
+
+      // Find the item to get original dates
+      const item = items.find((item) => item.id === itemId);
+      if (!item) return;
+
+      setDragState({
+        itemId,
+        handle, // 'start' or 'end'
+        startX: e.clientX,
+        startY: e.clientY,
+        originalStart: item.start,
+        originalEnd: item.end,
+        accumulatedDelta: 0, // Track accumulated pixel movement
+      });
+
+      // Set initial preview
+      setDragPreview({
+        start: item.start,
+        end: item.end,
+        name: item.name,
+      });
+    },
+    [items]
+  );
+
+  const handleDragMove = useCallback(
+    (e) => {
+      if (!dragState || !isDragging) return;
+
+      const deltaX = e.clientX - dragState.startX;
+      const totalDeltaX = dragState.accumulatedDelta + deltaX;
+
+      // Get the timeline container element to calculate accurate column width
+      const timelineContainer = document.querySelector(".grid");
+      if (!timelineContainer) return;
+
+      const containerRect = timelineContainer.getBoundingClientRect();
+      const columnWidth = containerRect.width / laneColumns.length;
+
+      // Calculate how many columns we've moved
+      const columnDelta = totalDeltaX / columnWidth;
+      const roundedColumnDelta = Math.round(columnDelta);
+
+      // Find the item being dragged
+      const itemIndex = items.findIndex((item) => item.id === dragState.itemId);
+      if (itemIndex === -1) return;
+
+      const item = items[itemIndex];
+      const newItems = [...items];
+
+      if (dragState.handle === "start") {
+        // Calculate new start date from original
+        const originalStartDate = new Date(dragState.originalStart);
+        const newStartDate = new Date(originalStartDate);
+        newStartDate.setDate(originalStartDate.getDate() + roundedColumnDelta);
+
+        // Ensure start date doesn't go after end date
+        const endDate = new Date(item.end);
+        if (newStartDate < endDate) {
+          newItems[itemIndex] = {
+            ...item,
+            start: newStartDate.toISOString().split("T")[0],
+          };
+          setItems(newItems);
+
+          // Update drag preview
+          setDragPreview((prev) => ({
+            ...prev,
+            start: newStartDate.toISOString().split("T")[0],
+          }));
+        }
+      } else if (dragState.handle === "end") {
+        // Calculate new end date from original
+        const originalEndDate = new Date(dragState.originalEnd);
+        const newEndDate = new Date(originalEndDate);
+        newEndDate.setDate(originalEndDate.getDate() + roundedColumnDelta);
+
+        // Ensure end date doesn't go before start date
+        const startDate = new Date(item.start);
+        if (newEndDate > startDate) {
+          newItems[itemIndex] = {
+            ...item,
+            end: newEndDate.toISOString().split("T")[0],
+          };
+          setItems(newItems);
+
+          // Update drag preview
+          setDragPreview((prev) => ({
+            ...prev,
+            end: newEndDate.toISOString().split("T")[0],
+          }));
+        }
+      }
+
+      // Update drag state with accumulated delta
+      setDragState((prev) => ({
+        ...prev,
+        startX: e.clientX,
+        startY: e.clientY,
+        accumulatedDelta: totalDeltaX,
+      }));
+    },
+    [dragState, isDragging, items, laneColumns.length]
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+    setDragState(null);
+    setDragPreview(null);
+  }, []);
+
+  // Add event listeners for drag
+  React.useEffect(() => {
+    if (isDragging) {
+      document.addEventListener("mousemove", handleDragMove);
+      document.addEventListener("mouseup", handleDragEnd);
+      document.body.style.cursor = "ew-resize";
+      document.body.style.userSelect = "none";
+
+      return () => {
+        document.removeEventListener("mousemove", handleDragMove);
+        document.removeEventListener("mouseup", handleDragEnd);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+    }
+  }, [isDragging, handleDragMove, handleDragEnd]);
 
   // For the header, show the month/year for month view, week range for week view, and date for day view
   let headerLabel = "";
@@ -305,6 +445,32 @@ function App() {
               Go to closest future event
             </button>
           )}
+
+          {/* Drag preview tooltip */}
+          {isDragging && dragPreview && (
+            <div
+              className="fixed bg-active text-white px-3 py-2 rounded text-sm z-50 pointer-events-none"
+              style={{
+                left: dragState?.startX + 10,
+                top: dragState?.startY - 40,
+              }}
+            >
+              <div className=" opacity-75">
+                {/* {new Date(dragPreview.start).toLocaleDateString()} →{" "} */}
+                <span title="Old end date" className="line-through opacity-60">
+                  {new Date(
+                    dragState?.handle === "start"
+                      ? dragState.originalEnd
+                      : dragState.originalEnd
+                  ).toLocaleDateString()}
+                </span>{" "}
+                <span title="New end date">
+                  {new Date(dragPreview.end).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div
             className="grid w-full"
             style={{
@@ -329,16 +495,53 @@ function App() {
                 const offset = getItemOffset(item);
                 const span = getItemSpan(item);
                 if (span <= 0 || offset < 0) return null;
+
+                const isBeingDragged = dragState?.itemId === item.id;
+
                 return (
                   <div
                     key={item.id}
-                    className="bg-white flex items-center justify-center p-4 rounded border border-border z-10"
+                    className={twMerge(
+                      "bg-white flex flex-col gap-2 py-2 px-4 rounded border border-border z-10 relative",
+                      isBeingDragged
+                        ? "opacity-75 shadow-lg"
+                        : "hover:shadow-md"
+                    )}
                     style={{
                       gridRow: laneIdx + 1,
                       gridColumn: `${offset + 1} / span ${span}`,
                     }}
                   >
-                    {item.name}
+                    {/* Left drag handle */}
+                    <button
+                      className={twMerge(
+                        "absolute left-1 top-1 bottom-1 w-2 rounded-full cursor-ew-resize opacity-0 hover:opacity-100 transition-opacity",
+                        isBeingDragged && dragState?.handle === "start"
+                          ? "bg-active opacity-100"
+                          : "bg-hover"
+                      )}
+                      onMouseDown={(e) => handleDragStart(e, item.id, "start")}
+                      title="Drag to resize start date"
+                    />
+
+                    {/* Right drag handle */}
+                    <button
+                      className={`absolute right-1 top-1 bottom-1 w-2 rounded-full cursor-ew-resize opacity-0 hover:opacity-100 transition-opacity ${
+                        isBeingDragged && dragState?.handle === "end"
+                          ? "bg-active opacity-100"
+                          : "bg-hover"
+                      }`}
+                      onMouseDown={(e) => handleDragStart(e, item.id, "end")}
+                      title="Drag to resize end date"
+                    />
+
+                    <span className="font-medium truncate" title={item.name}>
+                      {item.name}
+                    </span>
+                    <span className="text-xs opacity-75 truncate">
+                      {new Date(item.start).toLocaleDateString()} -{" "}
+                      {new Date(item.end).toLocaleDateString()}
+                    </span>
                   </div>
                 );
               })
