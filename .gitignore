@@ -1,0 +1,10 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+.parcel-cache/
+
+# OS generated files
+.DS_Store
+
