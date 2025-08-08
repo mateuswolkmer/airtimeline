@@ -2,6 +2,8 @@
 
 Airtimeline is a React component for visualizing items on a timeline. It arranges events in compact, horizontal lanes, making it easy to see overlaps and gaps.
 
+<img width="1418" height="787" alt="image" src="https://github.com/user-attachments/assets/7aaaeec4-bfbb-4a0c-aad1-7fbb82e7b443" />
+
 ## Features
 
 - Change the view to month, week, or day
