@@ -618,7 +618,7 @@ function App() {
                   <div
                     key={item.id}
                     className={twMerge(
-                      "bg-white flex flex-col gap-2 py-2 px-4 rounded border border-border z-10 relative transition-shadow",
+                      "bg-white flex flex-col gap-2 py-2 px-4 rounded border border-border z-10 relative transition-shadow overflow-hidden",
                       isBeingDragged
                         ? "opacity-75 shadow-md animate-wiggle"
                         : "hover:shadow-sm"
@@ -653,7 +653,7 @@ function App() {
                     />
 
                     <span
-                      className={`font-medium truncate px-1 py-0.5 rounded transition-colors ${
+                      className={`font-medium truncate rounded transition-colors ${
                         editingItem === item.id
                           ? "cursor-text outline-none bg-gray-100"
                           : "cursor-pointer hover:bg-gray-100"
