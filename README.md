@@ -12,7 +12,7 @@ Airtimeline is a React component for visualizing items on a timeline. It arrange
 
 ### What I like
 
-I like the minimalism and cleanliness, as well as the interactions when dragging events.
+I like the minimalism and cleanliness, as well as the interactions when dragging events. The instructions were straightforward and easy to follow, and I appreciate the mock data and assignLanes function, but I wish I had a bit more time to round things out. :)
 
 ### What I would change
 
