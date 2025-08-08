@@ -1,4 +1,14 @@
 @import "tailwindcss";
 
 @theme {
+  --color-background: #f8f9f2;
+  --color-background-section: #fff;
+  --color-foreground: #333;
+  --color-border: #c5c7cd;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+  }
 }
